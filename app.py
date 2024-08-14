@@ -1,19 +1,14 @@
 import torch
 from flask import Flask, request, jsonify
-from torchvision import transforms
-from PIL import Image
 from model import Detector
 from retinaface.pre_trained_models import get_model
 from inference.preprocess import extract_face, crop_face
-import io
 import cv2
 
 app = Flask(__name__)
 
 device = torch.device('cpu')
 model=Detector()
-# model=model.cuda()
-# model.load_state_dict(torch.load('model.pth', map_location=device))
 cnn_sd=torch.load('model.pth', map_location=device)
 model.load_state_dict(cnn_sd)
 model = model.to(device)
@@ -43,7 +38,6 @@ def predict():
     file = request.files['file']
     image_path = f'/tmp/{file.filename}'
     file.save(image_path)
-    # img_bytes = file.read()
 
     face_list = preprocess_image(image_path)
 
