@@ -5,7 +5,6 @@ from retinaface.pre_trained_models import get_model
 from inference.preprocess import extract_face, crop_face
 import cv2
 
-
 app = Flask(__name__)
 
 device = torch.device('cpu')
@@ -49,4 +48,4 @@ def predict():
     return jsonify({'fakeness': round(max(pred), 4)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5050, debug=True)
+    app.run(host='0.0.0.0')
