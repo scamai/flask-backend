@@ -5,6 +5,7 @@ from retinaface.pre_trained_models import get_model
 from inference.preprocess import extract_face, crop_face
 import cv2
 
+
 app = Flask(__name__)
 
 device = torch.device('cpu')
