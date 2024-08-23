@@ -4,6 +4,7 @@ from model import Detector
 from retinaface.pre_trained_models import get_model
 from inference.preprocess import extract_face, crop_face
 import cv2
+from scipy.special import logit, expit
 
 app = Flask(__name__)
 
@@ -44,8 +45,10 @@ def predict():
     with torch.no_grad():
        img=torch.tensor(face_list).to(device).float()/255
        pred=model(img).softmax(1)[:,1].cpu().data.numpy().tolist()
+       y_logits = logit(pred)
+       corrected = expit(0.4941 * y_logits + 1.587)
 
-    return jsonify({'fakeness': round(max(pred), 4)})
+    return jsonify({'fakeness': round(corrected, 4)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5090, debug=True)
