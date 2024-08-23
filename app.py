@@ -42,6 +42,9 @@ def predict():
 
     face_list = preprocess_image(image_path)
 
+    if len(face_list) == 0:
+        return jsonify({'error': 'No face detected'})
+
     with torch.no_grad():
        img=torch.tensor(face_list).to(device).float()/255
        pred=model(img).softmax(1)[:,1].cpu().data.numpy().tolist()
