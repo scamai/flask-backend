@@ -51,7 +51,7 @@ def predict():
         y_logits = logit(pred)
         corrected = expit(0.2584 * y_logits + 0.3927)
 
-    return jsonify({'fakeness': round(corrected, 4)})
+    return jsonify({'fakeness': round(float(corrected[0]), 4)})
 
 
 if __name__ == '__main__':
