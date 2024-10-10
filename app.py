@@ -82,7 +82,7 @@ def predict():
         img = torch.tensor(face_list).to(device).float() / 255
         pred = model(img).softmax(1)[:, 1].cpu().data.numpy().tolist()
         y_logits = logit(pred)
-        corrected = expit(0.2584 * y_logits + 0.3927)
+        corrected = expit(4.915e-01 * y_logits + 3.939e-01)
 
     return jsonify({'fakeness': round(float(corrected[0]), 4)})
 
