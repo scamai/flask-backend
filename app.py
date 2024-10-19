@@ -58,7 +58,7 @@ def preprocess_image(file_storage):
     # Decode the image as a NumPy array
     image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    face_detector = get_model(model_name="resnet50_2020-07-20", max_size=380, device=device)
+    face_detector = get_model(model_name="resnet50_2020-07-20", max_size=380, device='cpu')
     face_detector.eval()
     face_list = extract_face(image, face_detector)
     return face_list
