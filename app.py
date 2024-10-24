@@ -1,21 +1,16 @@
-import torch
 from flask import Flask, request, jsonify
-from model import Detector
 from retinaface.pre_trained_models import get_model
-from inference.preprocess import extract_face
 import cv2
 import numpy as np
-from scipy.special import logit, expit
+
+from deepfakedefender.infer import NetInference
+from selfblended.infer import SelfBlended
 
 app = Flask(__name__)
-device = torch.device("cpu")
-model = Detector()
-cnn_sd = torch.load('checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt', map_location=device, weights_only=True)
-new_sd = {}
-for k, v in cnn_sd.items():
-    new_sd['net.' + k] = v
-model.load_state_dict(new_sd)
-model.eval()
+DEVICE = 'cpu'
+self_blended_model = SelfBlended(DEVICE)
+deep_fake_defender_model = NetInference(DEVICE)
+print('Models loaded')
 
 
 def extract_face(frame, face_detector_model, image_size=(380, 380)):
@@ -51,17 +46,21 @@ def crop_face(img, bbox):
     return img[y0_new:y1_new, x0_new:x1_new]
 
 
-def preprocess_image(file_storage):
+def preprocess_image(image):
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    face_detector = get_model(model_name="resnet50_2020-07-20", max_size=380, device=DEVICE)
+    face_detector.eval()
+    face_list = extract_face(image, face_detector)
+    return face_list
+
+
+def _convert_to_image(file_storage):
     image_bytes = file_storage.read()
     # Convert raw bytes into a NumPy array
     image_np = np.frombuffer(image_bytes, np.uint8)
     # Decode the image as a NumPy array
     image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    face_detector = get_model(model_name="resnet50_2020-07-20", max_size=380, device='cpu')
-    face_detector.eval()
-    face_list = extract_face(image, face_detector)
-    return face_list
+    return image
 
 
 @app.route('/predict', methods=['POST'])
@@ -69,20 +68,20 @@ def predict():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
+    print('Received image')
+
     file = request.files['file']
-    face_list = preprocess_image(file)
+    image = _convert_to_image(file)
+    face_list = preprocess_image(image)
     if len(face_list) == 0:
         return jsonify({'error': 'No face detected'})
-
-    with torch.no_grad():
-        img = torch.tensor(face_list).to(device).float() / 255
-        pred = model(img).softmax(1)[:, 1].cpu().data.numpy().tolist()[0]
-        y_logits = logit(pred)
-        corrected = expit(3.563e-01 * y_logits + 5.780e-02)
-
-    return jsonify({'fakeness': round(float(corrected), 4)})
+    self_blended_pred = self_blended_model.infer(face_list)
+    print(f'SelfBlended fakeness: {self_blended_pred}')
+    deep_fake_defender_pred = deep_fake_defender_model.infer(image)
+    print(f'DeepFakeDefender fakeness: {deep_fake_defender_pred}')
+    return jsonify({'fakeness': round(float((self_blended_pred + deep_fake_defender_pred[0]) / 2), 4)})
 
 
 if __name__ == '__main__':
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=5090)
+    # serve(app, host='0.0.0.0', port=5090)
+    app.run(host='0.0.0.0', port=5090, debug=True)
