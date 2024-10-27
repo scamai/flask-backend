@@ -1,7 +1,5 @@
-import torch
 from torch import nn
 from efficientnet_pytorch import EfficientNet
-from utils.sam import SAM
 
 
 class Detector(nn.Module):

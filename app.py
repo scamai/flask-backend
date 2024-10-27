@@ -19,14 +19,23 @@ def extract_face(frame, face_detector_model, image_size=(380, 380)):
     if len(faces) == 0:
         print('No face is detected')
         return []
-    cropped_faces = []
-    for face_idx in range(len(faces)):
-        x0, y0, x1, y1 = faces[face_idx]['bbox']
+
+    highest_score = -1
+    bbox_with_highest_score = None
+    for f in faces:
+        if 'bbox' not in f or len(f['bbox']) != 4:
+            continue
+        if f['score'] > highest_score:
+            highest_score = f['score']
+            bbox_with_highest_score = f['bbox']
+
+    if bbox_with_highest_score is not None:
+        print(f'Face detected with highest score: {highest_score}')
+        x0, y0, x1, y1 = bbox_with_highest_score
         bbox = np.array([[x0, y0], [x1, y1]])
-        cropped_faces.append(
-            cv2.resize(crop_face(frame, bbox=bbox),
-                       dsize=image_size).transpose((2, 0, 1)))
-    return cropped_faces
+        return cv2.resize(crop_face(frame, bbox=bbox), dsize=image_size)
+
+    return None
 
 
 def crop_face(img, bbox):
@@ -50,8 +59,7 @@ def preprocess_image(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     face_detector = get_model(model_name="resnet50_2020-07-20", max_size=380, device=DEVICE)
     face_detector.eval()
-    face_list = extract_face(image, face_detector)
-    return face_list
+    return extract_face(image, face_detector)
 
 
 def _convert_to_image(file_storage):
@@ -72,16 +80,16 @@ def predict():
 
     file = request.files['file']
     image = _convert_to_image(file)
-    face_list = preprocess_image(image)
-    if len(face_list) == 0:
+    face = preprocess_image(image)
+    if face is None:
         return jsonify({'error': 'No face detected'})
-    self_blended_pred = self_blended_model.infer(face_list)
-    print(f'SelfBlended fakeness: {self_blended_pred}')
-    deep_fake_defender_pred = deep_fake_defender_model.infer(image)
+    # self_blended_pred = self_blended_model.infer(face_list)
+    # print(f'SelfBlended fakeness: {self_blended_pred}')
+    deep_fake_defender_pred = deep_fake_defender_model.infer(face)
     print(f'DeepFakeDefender fakeness: {deep_fake_defender_pred}')
-    return jsonify({'fakeness': round(float((self_blended_pred + deep_fake_defender_pred[0]) / 2), 4)})
+    return jsonify({'fakeness': round(float(deep_fake_defender_pred[0]), 4)})
 
 
 if __name__ == '__main__':
-    # serve(app, host='0.0.0.0', port=5090)
-    app.run(host='0.0.0.0', port=5090, debug=True)
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=5090, threads=1)
