@@ -2,14 +2,21 @@ from flask import Flask, request, jsonify
 from retinaface.pre_trained_models import get_model
 import cv2
 import numpy as np
+import os
+from dotenv import load_dotenv
+from functools import wraps
 
 from deepfakedefender.infer import NetInference
 from selfblended.infer import SelfBlended
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 DEVICE = 'cpu'
 self_blended_model = SelfBlended(DEVICE)
 deep_fake_defender_model = NetInference(DEVICE)
+app.config['FRONTEND_API_KEY'] = os.getenv("FRONTEND_API_KEY")
 print('Models loaded')
 
 
@@ -71,7 +78,18 @@ def _convert_to_image(file_storage):
     return image
 
 
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('x-api-key')
+        if api_key != app.config['FRONTEND_API_KEY']:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 @app.route('/predict', methods=['POST'])
+@require_api_key
 def predict():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
