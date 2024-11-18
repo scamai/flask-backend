@@ -1,0 +1,137 @@
+name: CI/CD to EC2
+on:
+    push:
+      branches: [ main, master ] # Only triggers on pushes to main or master
+    pull_request:
+      branches: [ main, master ] # Only triggers on pull requests to main or master
+    workflow_dispatch: # Allows manual triggers
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure GitHub SSH Key
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Create SSH directory if it doesn't exist
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # Add GitHub SSH key
+          echo "${{ secrets.GIT_SSH_KEY }}" > ~/.ssh/github_deploy_key
+          chmod 600 ~/.ssh/github_deploy_key
+          
+          # Configure SSH to use the key for GitHub
+          echo "Host github.com" > ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/github_deploy_key" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          
+          # Add GitHub's host key
+          ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+
+    - name: Setup System Dependencies and Environment
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Install Node.js if not present
+          if ! command -v node &> /dev/null; then
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          fi
+
+          # Install PM2 if not present
+          if ! command -v pm2 &> /dev/null; then
+            sudo npm install -g pm2
+          fi
+
+          # Install Python dependencies
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-pip curl
+
+          # Ensure pip is installed in the base system
+          curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+          sudo python3 get-pip.py
+          rm get-pip.py
+
+          # Setup virtual environment
+          sudo rm -rf /opt/venv  # Remove if exists to ensure clean state
+          sudo mkdir -p /opt/venv
+          sudo chown ${USER}:${USER} /opt/venv
+          python3 -m venv /opt/venv
+
+          # Activate and install base packages
+          source /opt/venv/bin/activate
+          /opt/venv/bin/python3 -m pip install --upgrade pip
+          /opt/venv/bin/pip install torch retina-face efficientnet-pytorch torchvision setuptools
+
+          # Verify installations
+          echo "Node version: $(node --version)"
+          echo "PM2 version: $(pm2 --version)"
+          echo "Python version: $(/opt/venv/bin/python3 --version)"
+          echo "Pip version: $(/opt/venv/bin/pip --version)"
+
+    - name: Update Code and Deploy Changes
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Update and deploy application
+          cd /opt/flask-backend
+          git fetch origin
+          git reset --hard origin/master
+          
+          # Install project dependencies
+          source /opt/venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Stop existing process if running
+          pm2 stop flask-backend-test || true
+          pm2 delete flask-backend-test || true
+          
+          # Start new process
+          pm2 start app.py \
+            --name flask-backend-test \
+            --interpreter=/opt/venv/bin/python3 \
+            --env PYTHONPATH=/opt/flask-backend \
+            --env FLASK_APP=app.py \
+            --env FLASK_ENV=production
+
+    - name: Health Check
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Wait for application to start
+          sleep 10
+          
+          # Check if process is running
+          if ! pm2 show flask-backend-test > /dev/null 2>&1; then
+            echo "Application failed to start"
+            pm2 logs flask-backend-test --lines 50
+            exit 1
+          fi
+          
+          # Check if endpoint is responding
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5050/health)
+          if [ "$response" != "200" ]; then
+            echo "Health check failed with status: $response"
+            pm2 logs flask-backend-test --lines 50
+            exit 1
+          fi
+          
+          echo "Health check passed successfully"
