@@ -14,7 +14,7 @@ class NetInference:
             self.device = device
         self.net = MFF_MoE(pretrained=False, device=self.device)
         # need to change the path to the correct path
-        self.net.load(path='/Users/david.xu/code/flask-backend/deepfakedefender/')
+        self.net.load(path='deepfake/')
         if self.device == 'cuda':
             self.net = nn.DataParallel(self.net).to(self.device)
         self.net.eval()
