@@ -15,7 +15,7 @@ class NetInference:
             self.device = device
         self.net = MFF_MoE(pretrained=False, device=self.device)
         # Get the current file's directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '')
         self.net.load(path=current_dir)
         if self.device == 'cuda':
             self.net = nn.DataParallel(self.net).to(self.device)
