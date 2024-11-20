@@ -25,6 +25,7 @@ gitdb==4.0.11
 GitPython==3.1.43
 google-pasta==0.2.0
 grpcio==1.66.2
+gunicorn==21.2.0
 h5py==3.12.1
 idna==3.10
 iglovikov-helper-functions==0.0.53
@@ -97,7 +98,6 @@ tqdm==4.66.5
 typing_extensions==4.12.2
 tzdata==2024.2
 urllib3==2.2.3
-waitress==3.0.0
 watchdog==5.0.3
 Werkzeug==3.0.4
 wheel==0.44.0

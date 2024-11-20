@@ -162,17 +162,44 @@ jobs:
           source /opt/venv/bin/activate
           pip install -r requirements.txt
           
-          # Stop existing process if running
-          pm2 stop flask-backend-test || true
-          pm2 delete flask-backend-test || true
+          # Kill any remaining gunicorn processes on port 5090
+          sudo lsof -t -i:5090 | xargs -r kill -9 || true
           
-          # Start new process
-          pm2 start app.py \
+          # Completely reset PM2
+          pm2 kill
+          sleep 2
+          
+          # Start PM2 daemon
+          pm2 daemon
+          sleep 2
+          
+          # Create a startup script
+          cat > start-flask.sh << 'EOL'
+          #!/bin/bash
+          source /opt/venv/bin/activate
+          exec /opt/venv/bin/gunicorn \
+            --workers 4 \
+            --threads 2 \
+            --bind 0.0.0.0:5090 \
+            --timeout 120 \
+            --graceful-timeout 30 \
+            app:app
+          EOL
+          
+          chmod +x start-flask.sh
+          
+          # Start the application using the script
+          pm2 start ./start-flask.sh \
             --name flask-backend-test \
-            --interpreter=/opt/venv/bin/python3 \
+            --interpreter=/bin/bash \
             --env PYTHONPATH=/opt/flask-backend \
             --env FLASK_APP=app.py \
             --env FLASK_ENV=production
+          
+          # Ensure the process started
+          sleep 5
+          pm2 list
+          pm2 save --force
 
     - name: Health Check
       uses: appleboy/ssh-action@master
