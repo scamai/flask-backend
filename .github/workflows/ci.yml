@@ -2,8 +2,6 @@ name: CI/CD to EC2
 on:
     push:
       branches: [ main, master ] # Only triggers on pushes to main or master
-    pull_request:
-      branches: [ main, master ] # Only triggers on pull requests to main or master
     workflow_dispatch: # Allows manual triggers
 
 jobs:
@@ -165,8 +163,8 @@ jobs:
           # Kill any remaining gunicorn processes on port 5090
           sudo lsof -t -i:5090 | xargs -r kill -9 || true
           
-          # Completely reset PM2
-          pm2 kill
+          # Reset PM2
+          pm2 kill || true
           sleep 2
           
           # Start PM2 daemon
@@ -178,11 +176,15 @@ jobs:
           #!/bin/bash
           source /opt/venv/bin/activate
           exec /opt/venv/bin/gunicorn \
-            --workers 4 \
+            --workers 1 \
             --threads 2 \
             --bind 0.0.0.0:5090 \
             --timeout 120 \
             --graceful-timeout 30 \
+            --max-requests 1000 \
+            --max-requests-jitter 50 \
+            --worker-class gthread \
+            --worker-tmp-dir /dev/shm \
             app:app
           EOL
           
