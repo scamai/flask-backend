@@ -182,20 +182,18 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # Wait for application to start
-          sleep 10
+          sleep 20
           
           # Check if process is running
           if ! pm2 show flask-backend-test > /dev/null 2>&1; then
             echo "Application failed to start"
-            pm2 logs flask-backend-test --lines 50
             exit 1
           fi
           
-          # Check if endpoint is responding
+          # Check if endpoint is responding on port 5090
           response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5090/health)
           if [ "$response" != "200" ]; then
             echo "Health check failed with status: $response"
-            pm2 logs flask-backend-test --lines 50
             exit 1
           fi
           
