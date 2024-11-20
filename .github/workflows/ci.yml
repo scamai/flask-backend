@@ -14,6 +14,25 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Setup Application Directory
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Create application directory if it doesn't exist
+          sudo mkdir -p /opt/flask-backend
+          sudo chown ubuntu:ubuntu /opt/flask-backend
+
+          # Initialize git srepository if not already initialized
+          if [ ! -d "/opt/flask-backend/.git" ]; then
+            cd /opt/flask-backend
+            git init
+            git remote add origin git@github.com:scamai/flask-backend.git || true
+            # The '|| true' ensures the script continues even if the remote already exists
+          fi
+
     - name: Configure GitHub SSH Key
       uses: appleboy/ssh-action@master
       with:
@@ -44,6 +63,18 @@ jobs:
         username: ${{ vars.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          # Install basic system dependencies
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-pip curl unzip
+
+          # Install AWS CLI if not present
+          if ! command -v aws &> /dev/null; then
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            rm -rf aws awscliv2.zip
+          fi
+
           # Install Node.js if not present
           if ! command -v node &> /dev/null; then
             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
@@ -55,17 +86,13 @@ jobs:
             sudo npm install -g pm2
           fi
 
-          # Install Python dependencies
-          sudo apt-get update
-          sudo apt-get install -y python3-venv python3-pip curl
-
           # Ensure pip is installed in the base system
           curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
           sudo python3 get-pip.py
           rm get-pip.py
 
           # Setup virtual environment
-          sudo rm -rf /opt/venv  # Remove if exists to ensure clean state
+          sudo rm -rf /opt/venv
           sudo mkdir -p /opt/venv
           sudo chown ${USER}:${USER} /opt/venv
           python3 -m venv /opt/venv
@@ -80,6 +107,44 @@ jobs:
           echo "PM2 version: $(pm2 --version)"
           echo "Python version: $(/opt/venv/bin/python3 --version)"
           echo "Pip version: $(/opt/venv/bin/pip --version)"
+          echo "AWS CLI version: $(aws --version)"
+
+    - name: Download Model Files
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Create models directory if it doesn't exist
+          mkdir -p /opt/flask-backend/deepfakedefender/models
+          
+          # Get hashes of existing files if they exist
+          if [ -f "/opt/flask-backend/deepfakedefender/weight.pth" ]; then
+            local_weight_hash=$(md5sum /opt/flask-backend/deepfakedefender/weight.pth | awk '{ print $1 }')
+          fi
+          if [ -f "/opt/flask-backend/deepfakedefender/ema.state" ]; then
+            local_ema_hash=$(md5sum /opt/flask-backend/deepfakedefender/ema.state | awk '{ print $1 }')
+          fi
+          
+          # Get hashes of S3 files
+          s3_weight_hash=$(aws s3api head-object --bucket scamai --key weight.pth --query ETag --output text | tr -d '"')
+          s3_ema_hash=$(aws s3api head-object --bucket scamai --key ema.state --query ETag --output text | tr -d '"')
+          
+          # Download if files don't exist or hashes don't match
+          if [ ! -f "/opt/flask-backend/deepfakedefender/weight.pth" ] || [ "$local_weight_hash" != "$s3_weight_hash" ]; then
+            echo "Downloading weight.pth from S3..."
+            aws s3 cp s3://scamai/weight.pth /opt/flask-backend/deepfakedefender/
+          else
+            echo "weight.pth is up to date"
+          fi
+          
+          if [ ! -f "/opt/flask-backend/deepfakedefender/ema.state" ] || [ "$local_ema_hash" != "$s3_ema_hash" ]; then
+            echo "Downloading ema.state from S3..."
+            aws s3 cp s3://scamai/ema.state /opt/flask-backend/deepfakedefender/
+          else
+            echo "ema.state is up to date"
+          fi
 
     - name: Update Code and Deploy Changes
       uses: appleboy/ssh-action@master
