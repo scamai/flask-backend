@@ -192,7 +192,7 @@ jobs:
           fi
           
           # Check if endpoint is responding
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5050/health)
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5090/health)
           if [ "$response" != "200" ]; then
             echo "Health check failed with status: $response"
             pm2 logs flask-backend-test --lines 50
