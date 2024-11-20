@@ -4,6 +4,7 @@ from torchvision import transforms
 import torch
 from PIL import Image
 import numpy as np
+import os
 
 
 class NetInference:
@@ -13,8 +14,9 @@ class NetInference:
         else:
             self.device = device
         self.net = MFF_MoE(pretrained=False, device=self.device)
-        # need to change the path to the correct path
-        self.net.load(path='deepfake/')
+        # Get the current file's directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.net.load(path=current_dir)
         if self.device == 'cuda':
             self.net = nn.DataParallel(self.net).to(self.device)
         self.net.eval()
