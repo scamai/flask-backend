@@ -1,12 +1,15 @@
 import torch
 from selfblended.model import Detector
+import os
 
 
 class SelfBlended:
     def __init__(self, device: str):
         self.device = torch.device(device)
         self.model = Detector()
-        cnn_sd = torch.load('checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt', map_location=device,
+        current_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '')
+        model_path = os.path.join(current_dir, 'checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt')
+        cnn_sd = torch.load(model_path, map_location=device,
                             weights_only=True)
         new_sd = {}
         for k, v in cnn_sd.items():

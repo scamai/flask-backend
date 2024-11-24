@@ -3,6 +3,7 @@ import copy
 import weakref
 import contextlib
 from typing import Iterable, Optional
+import warnings
 
 import timm
 import torch
@@ -405,11 +406,16 @@ class MFF_MoE(nn.Module):
 
     def load(self, path):
         # load network weights
-        weights_file = torch.load(path + 'weight.pth', map_location=self.device)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            weights_file = torch.load(path + 'weight.pth', map_location=self.device)
+
         self.experts.load_state_dict(weights_file)
 
         # load ema weights
-        self.ema_state = torch.load(path + 'ema.state', map_location=self.device)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            self.ema_state = torch.load(path + 'ema.state', map_location=self.device)
         for idx, expert in enumerate(self.experts):
             self.ema_list[idx].load_state_dict(self.ema_state[idx])
 
@@ -418,15 +424,13 @@ class MFF_MoE(nn.Module):
         self.ema_state.update({idx: self.ema_list[idx].state_dict()})
         torch.save(self.ema_state, path + 'ema.state')
 
-    def forward_expert(self, x, idx, isTrain=False):
+    def forward_expert(self, x, idx):
         cur_net = self.experts[idx]
         cur_ema = self.ema_list[idx]
-        if isTrain:
+
+        with cur_ema.average_parameters():
             x, feat = cur_net(x)
-        else:
-            with cur_ema.average_parameters():
-                x, feat = cur_net(x)
-                x = F.softmax(x, dim=1)[:, 1]
+            x = F.softmax(x, dim=1)[:, 1]
         return x, feat
 
     def forward(self, x):
