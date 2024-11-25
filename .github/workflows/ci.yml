@@ -128,6 +128,7 @@ jobs:
           # Get hashes of S3 files
           s3_weight_hash=$(aws s3api head-object --bucket scamai --key weight.pth --query ETag --output text | tr -d '"')
           s3_ema_hash=$(aws s3api head-object --bucket scamai --key ema.state --query ETag --output text | tr -d '"')
+          s3_sbi_hash=$(aws s3api head-object --bucket scamai --key checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt --query ETag --output text | tr -d '"')
           
           # Download if files don't exist or hashes don't match
           if [ ! -f "/opt/flask-backend/deepfakedefender/weight.pth" ] || [ "$local_weight_hash" != "$s3_weight_hash" ]; then
@@ -142,6 +143,13 @@ jobs:
             aws s3 cp s3://scamai/ema.state /opt/flask-backend/deepfakedefender/
           else
             echo "ema.state is up to date"
+          fi
+          
+          if [ ! -f "/opt/flask-backend/selfblended/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt" ] || [ "$local_sbi_hash" != "s3_sbi_hash" ]; then
+            echo "Downloading checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt from S3..."
+            aws s3 cp s3://scamai/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt /opt/flask-backend/selfblended/
+          else
+            echo "checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt is up to date"
           fi
 
     - name: Update Code and Deploy Changes
@@ -164,7 +172,7 @@ jobs:
           sudo lsof -t -i:5090 | xargs -r kill -9 || true
           
           # Reset PM2
-          pm2 kill || true
+          pm2 del flask-backend
           sleep 2
           
           # Start PM2 daemon
@@ -174,7 +182,7 @@ jobs:
           # Create a startup script
           cat > start-flask.sh << 'EOL'
           #!/bin/bash
-          source /home/ubuntu/flask-backend/venv/bin/activate
+          source /opt/venv/bin/activate
           exec /opt/venv/bin/gunicorn \
             --workers 1 \
             --threads 2 \
