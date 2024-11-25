@@ -169,7 +169,7 @@ jobs:
           sudo lsof -t -i:5090 | xargs -r kill -9 || true
           
           # Reset PM2
-          pm2 del flask-backend
+          pm2 del flask-backend | true
           sleep 2
           pm2 start "gunicorn -w 1 -b 127.0.0.1:5090 app:app" --name flask-backend
           sleep 5

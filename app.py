@@ -15,7 +15,9 @@ app = Flask(__name__)
 DEVICE = 'cpu'
 self_blended_model = SelfBlended(DEVICE)
 deep_fake_defender_model = NetInference(DEVICE)
-app.config['FRONTEND_API_KEY'] = os.getenv("FRONTEND_API_KEY")
+front_end_api_key = os.getenv("FRONTEND_API_KEY")
+app.config['FRONTEND_API_KEY'] = front_end_api_key
+print(f'Frontend API key: {front_end_api_key}')
 print('Models loaded')
 
 
