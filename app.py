@@ -4,12 +4,16 @@ import cv2
 import numpy as np
 import os
 from functools import wraps
+from dotenv import load_dotenv
 
 from deepfakedefender.infer import NetInference
 from selfblended.infer import SelfBlended
 
 import warnings
 warnings.filterwarnings("ignore")
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 DEVICE = 'cpu'
