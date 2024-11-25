@@ -3,7 +3,6 @@ from retinaface.pre_trained_models import get_model
 import cv2
 import numpy as np
 import os
-from dotenv import load_dotenv
 from functools import wraps
 
 from deepfakedefender.infer import NetInference
@@ -11,9 +10,6 @@ from selfblended.infer import SelfBlended
 
 import warnings
 warnings.filterwarnings("ignore")
-
-# Load environment variables from .env file
-load_dotenv()
 
 app = Flask(__name__)
 DEVICE = 'cpu'

@@ -20,12 +20,12 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # Create application directory if it doesn't exist
-          sudo mkdir -p /opt/flask-backend
-          sudo chown ubuntu:ubuntu /opt/flask-backend
+          sudo mkdir -p /home/ubuntu/flask-backend
+          sudo chown ubuntu:ubuntu /home/ubuntu/flask-backend
 
           # Initialize git srepository if not already initialized
-          if [ ! -d "/opt/flask-backend/.git" ]; then
-            cd /opt/flask-backend
+          if [ ! -d "/home/ubuntu/flask-backend/.git" ]; then
+            cd /home/ubuntu/flask-backend
             git init
             git remote add origin git@github.com:scamai/flask-backend.git || true
             # The '|| true' ensures the script continues even if the remote already exists
@@ -90,21 +90,21 @@ jobs:
           rm get-pip.py
 
           # Setup virtual environment
-          sudo rm -rf /opt/venv
-          sudo mkdir -p /opt/venv
-          sudo chown ${USER}:${USER} /opt/venv
-          python3 -m venv /opt/venv
+          sudo rm -rf /home/ubuntu/flask-backend/venv
+          sudo mkdir -p /home/ubuntu/flask-backend/venv
+          sudo chown ${USER}:${USER} /home/ubuntu/flask-backend/venv
+          python3 -m venv /home/ubuntu/flask-backend/venv
 
           # Activate and install base packages
-          source /opt/venv/bin/activate
-          /opt/venv/bin/python3 -m pip install --upgrade pip
-          /opt/venv/bin/pip install torch retina-face efficientnet-pytorch torchvision setuptools
+          source /home/ubuntu/flask-backend/venv/bin/activate
+          /home/ubuntu/flask-backend/venv/bin/python3 -m pip install --upgrade pip
+          /home/ubuntu/flask-backend/venv/bin/pip install torch retina-face efficientnet-pytorch torchvision setuptools
 
           # Verify installations
           echo "Node version: $(node --version)"
           echo "PM2 version: $(pm2 --version)"
-          echo "Python version: $(/opt/venv/bin/python3 --version)"
-          echo "Pip version: $(/opt/venv/bin/pip --version)"
+          echo "Python version: $(/home/ubuntu/flask-backend/venv/bin/python3 --version)"
+          echo "Pip version: $(/home/ubuntu/flask-backend/venv/bin/pip --version)"
           echo "AWS CLI version: $(aws --version)"
 
     - name: Download Model Files
@@ -114,15 +114,12 @@ jobs:
         username: ${{ vars.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # Create models directory if it doesn't exist
-          mkdir -p /opt/flask-backend/deepfakedefender/models
-          
           # Get hashes of existing files if they exist
-          if [ -f "/opt/flask-backend/deepfakedefender/weight.pth" ]; then
-            local_weight_hash=$(md5sum /opt/flask-backend/deepfakedefender/weight.pth | awk '{ print $1 }')
+          if [ -f "/home/ubuntu/flask-backend/deepfakedefender/weight.pth" ]; then
+            local_weight_hash=$(md5sum /home/ubuntu/flask-backend/deepfakedefender/weight.pth | awk '{ print $1 }')
           fi
-          if [ -f "/opt/flask-backend/deepfakedefender/ema.state" ]; then
-            local_ema_hash=$(md5sum /opt/flask-backend/deepfakedefender/ema.state | awk '{ print $1 }')
+          if [ -f "/home/ubuntu/flask-backend/deepfakedefender/ema.state" ]; then
+            local_ema_hash=$(md5sum /home/ubuntu/flask-backend/deepfakedefender/ema.state | awk '{ print $1 }')
           fi
           
           # Get hashes of S3 files
@@ -131,23 +128,23 @@ jobs:
           s3_sbi_hash=$(aws s3api head-object --bucket scamai --key checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt --query ETag --output text | tr -d '"')
           
           # Download if files don't exist or hashes don't match
-          if [ ! -f "/opt/flask-backend/deepfakedefender/weight.pth" ] || [ "$local_weight_hash" != "$s3_weight_hash" ]; then
+          if [ ! -f "/home/ubuntu/flask-backend/deepfakedefender/weight.pth" ] || [ "$local_weight_hash" != "$s3_weight_hash" ]; then
             echo "Downloading weight.pth from S3..."
-            aws s3 cp s3://scamai/weight.pth /opt/flask-backend/deepfakedefender/
+            aws s3 cp s3://scamai/weight.pth /home/ubuntu/flask-backend/deepfakedefender/
           else
             echo "weight.pth is up to date"
           fi
           
-          if [ ! -f "/opt/flask-backend/deepfakedefender/ema.state" ] || [ "$local_ema_hash" != "$s3_ema_hash" ]; then
+          if [ ! -f "/home/ubuntu/flask-backend/deepfakedefender/ema.state" ] || [ "$local_ema_hash" != "$s3_ema_hash" ]; then
             echo "Downloading ema.state from S3..."
-            aws s3 cp s3://scamai/ema.state /opt/flask-backend/deepfakedefender/
+            aws s3 cp s3://scamai/ema.state /home/ubuntu/flask-backend/deepfakedefender/
           else
             echo "ema.state is up to date"
           fi
           
-          if [ ! -f "/opt/flask-backend/selfblended/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt" ] || [ "$local_sbi_hash" != "s3_sbi_hash" ]; then
+          if [ ! -f "/home/ubuntu/flask-backend/selfblended/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt" ] || [ "$local_sbi_hash" != "s3_sbi_hash" ]; then
             echo "Downloading checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt from S3..."
-            aws s3 cp s3://scamai/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt /opt/flask-backend/selfblended/
+            aws s3 cp s3://scamai/checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt /home/ubuntu/flask-backend/selfblended/
           else
             echo "checkpoint_epoch_49_efficientnet-b4_bs_12_epoch_50_imgSize_380.pt is up to date"
           fi
@@ -160,12 +157,12 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # Update and deploy application
-          cd /opt/flask-backend
+          cd /home/ubuntu/flask-backend
           git fetch origin
           git reset --hard origin/master
           
           # Install project dependencies
-          source /opt/venv/bin/activate
+          source /home/ubuntu/flask-backend/venv/bin/activate
           pip install -r requirements.txt
           
           # Kill any remaining gunicorn processes on port 5090
@@ -182,8 +179,8 @@ jobs:
           # Create a startup script
           cat > start-flask.sh << 'EOL'
           #!/bin/bash
-          source /opt/venv/bin/activate
-          exec /opt/venv/bin/gunicorn \
+          source /home/ubuntu/flask-backend/venv/bin/activate
+          exec /home/ubuntu/flask-backend/venv/bin/gunicorn \
             --workers 1 \
             --threads 2 \
             --bind 0.0.0.0:5090 \
@@ -202,7 +199,7 @@ jobs:
           pm2 start ./start-flask.sh \
             --name flask-backend \
             --interpreter=/bin/bash \
-            --env PYTHONPATH=/opt/flask-backend \
+            --env PYTHONPATH=/home/ubuntu/flask-backend \
             --env FLASK_APP=app.py \
             --env FLASK_ENV=production
           
