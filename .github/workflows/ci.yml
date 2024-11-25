@@ -174,7 +174,7 @@ jobs:
           # Create a startup script
           cat > start-flask.sh << 'EOL'
           #!/bin/bash
-          source /opt/venv/bin/activate
+          source /home/ubuntu/flask-backend/venv/bin/activate
           exec /opt/venv/bin/gunicorn \
             --workers 1 \
             --threads 2 \
@@ -192,7 +192,7 @@ jobs:
           
           # Start the application using the script
           pm2 start ./start-flask.sh \
-            --name flask-backend-test \
+            --name flask-backend \
             --interpreter=/bin/bash \
             --env PYTHONPATH=/opt/flask-backend \
             --env FLASK_APP=app.py \
@@ -214,7 +214,7 @@ jobs:
           sleep 20
           
           # Check if process is running
-          if ! pm2 show flask-backend-test > /dev/null 2>&1; then
+          if ! pm2 show flask-backend > /dev/null 2>&1; then
             echo "Application failed to start"
             exit 1
           fi
