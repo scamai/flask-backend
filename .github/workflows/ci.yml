@@ -162,7 +162,7 @@ jobs:
           git reset --hard origin/master
           
           # Install project dependencies
-          source /home/ubuntu/flask-backend/venv/bin/activate
+          source venv/bin/activate
           pip install -r requirements.txt
           
           # Kill any remaining gunicorn processes on port 5090
@@ -171,42 +171,9 @@ jobs:
           # Reset PM2
           pm2 del flask-backend
           sleep 2
-          
-          # Start PM2 daemon
-          pm2 daemon
-          sleep 2
-          
-          # Create a startup script
-          cat > start-flask.sh << 'EOL'
-          #!/bin/bash
-          source /home/ubuntu/flask-backend/venv/bin/activate
-          exec /home/ubuntu/flask-backend/venv/bin/gunicorn \
-            --workers 1 \
-            --threads 2 \
-            --bind 0.0.0.0:5090 \
-            --timeout 120 \
-            --graceful-timeout 30 \
-            --max-requests 1000 \
-            --max-requests-jitter 50 \
-            --worker-class gthread \
-            --worker-tmp-dir /dev/shm \
-            app:app
-          EOL
-          
-          chmod +x start-flask.sh
-          
-          # Start the application using the script
-          pm2 start ./start-flask.sh \
-            --name flask-backend \
-            --interpreter=/bin/bash \
-            --env PYTHONPATH=/home/ubuntu/flask-backend \
-            --env FLASK_APP=app.py \
-            --env FLASK_ENV=production
-          
-          # Ensure the process started
+          pm2 start "gunicorn -w 1 -b 127.0.0.1:5090 app:app" --name flask-backend
           sleep 5
           pm2 list
-          pm2 save --force
 
     - name: Health Check
       uses: appleboy/ssh-action@master
