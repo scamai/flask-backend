@@ -9,6 +9,9 @@ from functools import wraps
 from deepfakedefender.infer import NetInference
 from selfblended.infer import SelfBlended
 
+import warnings
+warnings.filterwarnings("ignore")
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -40,7 +43,8 @@ def extract_face(frame, face_detector_model, image_size=(380, 380)):
         print(f'Face detected with highest score: {highest_score}')
         x0, y0, x1, y1 = bbox_with_highest_score
         bbox = np.array([[x0, y0], [x1, y1]])
-        return cv2.resize(crop_face(frame, bbox=bbox), dsize=image_size)
+        cropped_face, x0_new, x1_new, y0_new, y1_new = crop_face(frame, bbox=bbox)
+        return cv2.resize(cropped_face, dsize=image_size), x0_new, x1_new, y0_new, y1_new
 
     return None
 
@@ -59,7 +63,7 @@ def crop_face(img, bbox):
     y1_new = int(min(height, y1 + h1_margin + 1))
     x0_new = int(max(0, x0 - w0_margin))
     x1_new = int(min(weight, x1 + w1_margin + 1))
-    return img[y0_new:y1_new, x0_new:x1_new]
+    return img[y0_new:y1_new, x0_new:x1_new], x0_new, x1_new, y0_new, y1_new
 
 
 def preprocess_image(image):
@@ -93,19 +97,25 @@ def require_api_key(f):
 def predict():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-
     print('Received image')
-
     file = request.files['file']
     image = _convert_to_image(file)
-    face = preprocess_image(image)
+    face, x0_new, x1_new, y0_new, y1_new = preprocess_image(image)
     if face is None:
         return jsonify({'error': 'No face detected'})
-    # self_blended_pred = self_blended_model.infer(face_list)
-    # print(f'SelfBlended fakeness: {self_blended_pred}')
+    self_blended_pred = self_blended_model.infer([face.transpose((2, 0, 1))])
+    print(f'SelfBlended fakeness: {self_blended_pred}')
     deep_fake_defender_pred = deep_fake_defender_model.infer(face)
     print(f'DeepFakeDefender fakeness: {deep_fake_defender_pred}')
-    return jsonify({'fakeness': round(float(deep_fake_defender_pred[0]), 4)})
+    fakeness = round(float(max(deep_fake_defender_pred[0], self_blended_pred)), 4)
+
+    return jsonify({'fakeness': fakeness,
+                    'face_coordinates': {
+                        'x0': x0_new,
+                        'x1': x1_new,
+                        'y0': y0_new,
+                        'y1': y1_new
+                    }})
 
 
 @app.route('/health', methods=['GET'])
